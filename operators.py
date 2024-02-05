@@ -1721,6 +1721,12 @@ class NWAddPrincipledSetup(Operator, NWBase, ImportHelper):
         default=True
     )
 
+    invert_normal: BoolProperty(
+        name='Invert Normal',
+        description='Invert Normal Map Y Channel',
+        default=True
+    )
+
     order = [
         "filepath",
         "files",
@@ -1731,6 +1737,7 @@ class NWAddPrincipledSetup(Operator, NWBase, ImportHelper):
         layout.alignment = 'LEFT'
 
         layout.prop(self, 'relative_path')
+        layout.prop(self, 'invert_normal')
 
     @classmethod
     def poll(cls, context):
@@ -1774,6 +1781,8 @@ class NWAddPrincipledSetup(Operator, NWBase, ImportHelper):
             ['Emission Color', tags.emission.split(' '), None],
             ['Alpha', tags.alpha.split(' '), None],
             ['Ambient Occlusion', tags.ambient_occlusion.split(' '), None],
+            ['Mask', tags.mask.split(' '), None],
+            ['ORM', tags.orm.split(' '), None],
         ]
 
         match_files_to_socket_names(self.files, socketnames)
@@ -1801,6 +1810,8 @@ class NWAddPrincipledSetup(Operator, NWBase, ImportHelper):
         ao_texture = None
         normal_node = None
         roughness_node = None
+        mask_node = None
+        orm_node = None
         for i, sname in enumerate(socketnames):
             print(i, sname[0], sname[2])
 
@@ -1830,6 +1841,56 @@ class NWAddPrincipledSetup(Operator, NWBase, ImportHelper):
 
                 continue
 
+            if sname[0] == 'Mask':
+                # Test if Mask
+                mask_node = nodes.new(type='ShaderNodeTexImage')
+                img = bpy.data.images.load(path.join(import_path, sname[2]))
+                mask_node.image = img
+                mask_node.label = 'Mask Map'
+                if mask_node.image:
+                    mask_node.image.colorspace_settings.is_data = True
+                try:
+                    node = bpy.data.node_groups['MaskMap']
+                    print(type(node))
+                except Exception:
+                    script_file = path.realpath(__file__)
+                    directory = path.dirname(script_file)
+                    node_file = path.join(directory,"invertNode.blend\\NodeTree\\")
+                    bpy.ops.wm.append(filename="MaskMap", directory=node_file)
+
+                group = nodes.new(type='ShaderNodeGroup')
+                group.node_tree = bpy.data.node_groups["MaskMap"]
+                group.location = active_node.location + Vector((-200, -500))
+                link = links.new(group.inputs[0], mask_node.outputs[0])
+                link = links.new(group.inputs[1], mask_node.outputs[1])
+                link = links.new(active_node.inputs[1], group.outputs[0])
+                link = links.new(active_node.inputs[2], group.outputs[3])
+
+            if sname[0] == 'ORM':
+                # Test if Mask
+                orm_node = nodes.new(type='ShaderNodeTexImage')
+                img = bpy.data.images.load(path.join(import_path, sname[2]))
+                orm_node.image = img
+                orm_node.label = 'ORM'
+                if orm_node.image:
+                    orm_node.image.colorspace_settings.is_data = True
+                try:
+                    node = bpy.data.node_groups['ORM']
+                    print(type(node))
+                except Exception:
+                    script_file = path.realpath(__file__)
+                    directory = path.dirname(script_file)
+                    node_file = path.join(directory,"invertNode.blend\\NodeTree\\")
+                    bpy.ops.wm.append(filename="ORM", directory=node_file)
+
+                group = nodes.new(type='ShaderNodeGroup')
+                group.node_tree = bpy.data.node_groups["ORM"]
+                group.location = active_node.location + Vector((-200, -500))
+                link = links.new(group.inputs[0], orm_node.outputs[0])
+                link = links.new(active_node.inputs[2], group.outputs[2])
+                link = links.new(active_node.inputs[1], group.outputs[1])
+
+
             # AMBIENT OCCLUSION TEXTURE
             if sname[0] == 'Ambient Occlusion':
                 ao_texture = nodes.new(type='ShaderNodeTexImage')
@@ -1840,68 +1901,86 @@ class NWAddPrincipledSetup(Operator, NWBase, ImportHelper):
                     ao_texture.image.colorspace_settings.is_data = True
 
                 continue
+            if sname[0] != "Mask" and sname[0] != "ORM":
+                if not active_node.inputs[sname[0]].is_linked:
+                    # No texture node connected -> add texture node with new image
+                    texture_node = nodes.new(type='ShaderNodeTexImage')
+                    img = bpy.data.images.load(path.join(import_path, sname[2]))
+                    texture_node.image = img
 
-            if not active_node.inputs[sname[0]].is_linked:
-                # No texture node connected -> add texture node with new image
-                texture_node = nodes.new(type='ShaderNodeTexImage')
-                img = bpy.data.images.load(path.join(import_path, sname[2]))
-                texture_node.image = img
+                    # NORMAL NODES
+                    if sname[0] == 'Normal':
+                        # Test if new texture node is normal or bump map
+                        fname_components = split_into_components(sname[2])
+                        match_normal = set(normal_abbr).intersection(set(fname_components))
+                        match_bump = set(bump_abbr).intersection(set(fname_components))
+                        if match_normal:
+                            # If Normal add normal node in between
+                            normal_node = nodes.new(type='ShaderNodeNormalMap')
+                            try:
+                                node = bpy.data.node_groups['invertY']
+                                print(type(node))
+                            except Exception:
+                                
+                                script_file = path.realpath(__file__)
+                                directory = path.dirname(script_file)
+                                node_file = path.join(directory,"invertNode.blend\\NodeTree\\")
+                                bpy.ops.wm.append(filename="invertY", directory=node_file)
+                        
+                            group = nodes.new(type='ShaderNodeGroup')
+                            group.node_tree = bpy.data.node_groups["invertY"]
+                            link = links.new(normal_node.inputs[1], group.outputs[0])
+                            link = links.new(group.inputs[0], texture_node.outputs[0])
+                            group.location = active_node.location + Vector((-200, -300))
 
-                # NORMAL NODES
-                if sname[0] == 'Normal':
-                    # Test if new texture node is normal or bump map
-                    fname_components = split_into_components(sname[2])
-                    match_normal = set(normal_abbr).intersection(set(fname_components))
-                    match_bump = set(bump_abbr).intersection(set(fname_components))
-                    if match_normal:
-                        # If Normal add normal node in between
-                        normal_node = nodes.new(type='ShaderNodeNormalMap')
-                        link = connect_sockets(normal_node.inputs[1], texture_node.outputs[0])
-                    elif match_bump:
-                        # If Bump add bump node in between
-                        normal_node = nodes.new(type='ShaderNodeBump')
-                        link = connect_sockets(normal_node.inputs[2], texture_node.outputs[0])
+                        elif match_bump:
+                            # If Bump add bump node in between
+                            normal_node = nodes.new(type='ShaderNodeBump')
+                            link = connect_sockets(normal_node.inputs[2], texture_node.outputs[0])
 
-                    link = connect_sockets(active_node.inputs[sname[0]], normal_node.outputs[0])
-                    normal_node_texture = texture_node
+                        link = connect_sockets(active_node.inputs[sname[0]], normal_node.outputs[0])
+                        normal_node_texture = texture_node
 
-                elif sname[0] == 'Roughness':
-                    # Test if glossy or roughness map
-                    fname_components = split_into_components(sname[2])
-                    match_rough = set(rough_abbr).intersection(set(fname_components))
-                    match_gloss = set(gloss_abbr).intersection(set(fname_components))
+                    elif sname[0] == 'Roughness':
+                        # Test if glossy or roughness map
+                        fname_components = split_into_components(sname[2])
+                        match_rough = set(rough_abbr).intersection(set(fname_components))
+                        match_gloss = set(gloss_abbr).intersection(set(fname_components))
 
-                    if match_rough:
-                        # If Roughness nothing to to
+                        if match_rough:
+                            # If Roughness nothing to to
+                            link = connect_sockets(active_node.inputs[sname[0]], texture_node.outputs[0])
+
+                        elif match_gloss:
+                            # If Gloss Map add invert node
+                            invert_node = nodes.new(type='ShaderNodeInvert')
+                            link = connect_sockets(invert_node.inputs[1], texture_node.outputs[0])
+
+                            link = connect_sockets(active_node.inputs[sname[0]], invert_node.outputs[0])
+                            roughness_node = texture_node
+
+                    else:
+                        # This is a simple connection Texture --> Input slot
                         link = connect_sockets(active_node.inputs[sname[0]], texture_node.outputs[0])
 
-                    elif match_gloss:
-                        # If Gloss Map add invert node
-                        invert_node = nodes.new(type='ShaderNodeInvert')
-                        link = connect_sockets(invert_node.inputs[1], texture_node.outputs[0])
-
-                        link = connect_sockets(active_node.inputs[sname[0]], invert_node.outputs[0])
-                        roughness_node = texture_node
+                    # Use non-color except for color inputs
+                    if sname[0] not in ['Base Color', 'Emission Color'] and texture_node.image:
+                        texture_node.image.colorspace_settings.is_data = True
 
                 else:
-                    # This is a simple connection Texture --> Input slot
-                    link = connect_sockets(active_node.inputs[sname[0]], texture_node.outputs[0])
+                    # If already texture connected. add to node list for alignment
+                    texture_node = active_node.inputs[sname[0]].links[0].from_node
 
-                # Use non-color except for color inputs
-                if sname[0] not in ['Base Color', 'Emission Color'] and texture_node.image:
-                    texture_node.image.colorspace_settings.is_data = True
-
-            else:
-                # If already texture connected. add to node list for alignment
-                texture_node = active_node.inputs[sname[0]].links[0].from_node
-
-            # This are all connected texture nodes
-            texture_nodes.append(texture_node)
-            texture_node.label = sname[0]
+                # This are all connected texture nodes
+                texture_nodes.append(texture_node)
+                texture_node.label = sname[0]
 
         if disp_texture:
             texture_nodes.append(disp_texture)
-
+        if mask_node:
+            texture_nodes.append(mask_node)
+        if orm_node:
+            texture_nodes.append(orm_node)
         if ao_texture:
             # We want the ambient occlusion texture to be the top most texture node
             texture_nodes.insert(0, ao_texture)

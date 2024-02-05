@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 bl_info = {
-    "name": "Node Wrangler",
-    "author": "Bartek Skorupa, Greg Zaal, Sebastian Koenig, Christian Brinkmann, Florian Meyer",
+    "name": "Node Wrangler Enhanced",
+    "author": "Bartek Skorupa, Greg Zaal, Sebastian Koenig, Christian Brinkmann, Florian Meyer, Antony Naumovic",
     "version": (3, 47),
     "blender": (4, 0, 0),
     "location": "Node Editor Toolbar or Shift-W",

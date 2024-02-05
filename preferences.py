@@ -62,6 +62,14 @@ class NWPrincipledPreferences(bpy.types.PropertyGroup):
         name='Ambient Occlusion',
         default='ao ambient occlusion',
         description='Naming Components for AO maps')
+    orm: StringProperty(
+        name='Occlusion Roughness Metallic',
+        default='orm occlusionroughnessmetallic',
+        description='Naming Components for ORM maps')
+    mask: StringProperty(
+        name='Mask Map',
+        default='mask maskmap',
+        description='Naming Components for Mask maps')
 
 
 # Addon prefs
@@ -132,6 +140,8 @@ class NWNodeWrangler(bpy.types.AddonPreferences):
             col.prop(tags, "emission")
             col.prop(tags, "alpha")
             col.prop(tags, "ambient_occlusion")
+            col.prop(tags, "orm")
+            col.prop(tags, "mask")
 
         box = layout.box()
         col = box.column(align=True)
